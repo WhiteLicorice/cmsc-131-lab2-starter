@@ -1,5 +1,5 @@
 <!--no-pdf-->
-# CMSC 131 Lab lab2 Starter
+# CMSC 131 Lab 2 Starter
 
 A C-callable library of sort, search, and utility routines in assembly. The manual is the assignment. This file is the repository's own notes.
 
@@ -22,10 +22,7 @@ make
 make check
 ```
 
-`make` builds `bench.c         provided: file I/O, timing, and the C-side comparison
-sort.asm        yours
-search.asm      yours
-util.asm        yours`. `make check` builds, then runs `./run_tests.sh`,
+`make` builds `bench`. `make check` builds, then runs `./run_tests.sh`,
 which reports each test and exits nonzero when any of them differ.
 
 ## Reading a First Run

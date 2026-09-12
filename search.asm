@@ -18,7 +18,7 @@
 ;
 ; Requirements from the manual:
 ;
-;   * Genuinely recursive.
+;   * Recursive.
 ;   * Compute the midpoint as lo + (hi - lo) / 2, never (lo + hi) / 2.
 ;     The sum can overflow 32 bits on large arrays. The difference cannot.
 ;     The manual calls out that this exact bug lived in the Java standard
@@ -59,9 +59,11 @@ _bsearch_asm:
         ; has n=0, which makes hi=-1 before the first comparison. That case
         ; must return -1 immediately.
         ;
-        ; The midpoint needs a signed division by 2 (the range can involve
-        ; negatives when key is below everything), so think about cdq before
-        ; idiv rather than clearing edx with mov edx, 0. Sign matters here.
+        ; For the midpoint, compute hi - lo first, halve it, then add lo.
+        ; The base case runs before the midpoint, so hi - lo is never
+        ; negative there and a shift halves it. If you reach for idiv
+        ; instead, sign-extend with cdq. mov edx, 0 is right only for a
+        ; dividend that cannot be negative.
         ;
 
         popa

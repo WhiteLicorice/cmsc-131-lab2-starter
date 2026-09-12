@@ -20,13 +20,16 @@
 ; in eax, preserve ebx/esi/edi/ebp, clean arguments after every call.
 ;
 ; gcd_asm also sets the global `gcd_depth` to the recursion depth of its
-; most recent call. bench.c declares it extern and prints it after --gcd:
+; most recent call. The depth is the number of gcd calls on the stack at
+; the deepest point, the first call counted as 1. gcd(1071, 462) makes
+; four calls, so it reaches 4. bench.c declares the global extern and
+; prints it after --gcd:
 ;
-;       int gcd_depth               ; in .bss, exported, one int
+;       int gcd_depth               (in .bss, exported, one int)
 ;
 ; The manual's requirements:
 ;
-;   * Both genuinely recursive (Euclid's algorithm for gcd).
+;   * Both recursive (Euclid's algorithm for gcd).
 ;   * sum_range_asm must be reentrant. It has to stay correct when a second
 ;     call begins before the first has finished. That means no .data or
 ;     .bss storage that changes during execution. Everything lives on the
@@ -44,7 +47,7 @@
 ;       if b == 0: return a
 ;       return gcd(b, a % b)
 ;
-; sum_range, the reentrant shape:
+; sum_range, written so that nothing lives outside the stack:
 ;
 ;   sum_range(lo, hi):
 ;       if lo > hi: return 0
@@ -75,9 +78,11 @@ _gcd_asm:
         pusha
 
         ;
-        ; TODO: gcd. Track the depth: increment gcd_depth at entry and
-        ; decrement at exit, or carry it in a register down the recursion.
-        ; Either way bench.c reads it after the call returns.
+        ; TODO: gcd. Count the calls. Reset gcd_depth at entry, then keep
+        ; the deepest level reached, with the first call as level 1. Carry
+        ; the current level in a register or count it in the global, but
+        ; leave the peak behind. bench.c reads gcd_depth after the call
+        ; returns, so a counter that returns to zero on exit prints 0.
         ;
 
         popa

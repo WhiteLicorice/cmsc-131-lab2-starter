@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # renlib correctness gate. Runs every mode the manual describes and reports
-# pass or fail. Each sort must report "Match: YES"; gcd must be 21 with the
-# depth printed. The reentrancy demo must pass.
+# pass or fail. Each sort must report "Match: YES". Every search probe must
+# be correct. gcd must be 21 at depth 4. The reentrancy demo and the
+# hostile caller must pass.
 #
 #       ./run_tests.sh
 #
@@ -45,7 +46,9 @@ for file in tests/*.txt; do
     fi
 done
 
-if "$bin" --gcd 1071 462 | grep -q "gcd_asm(1071, 462) = 21"; then
+gcd_out="$("$bin" --gcd 1071 462)"
+if echo "$gcd_out" | grep -q "gcd_asm(1071, 462) = 21" \
+   && echo "$gcd_out" | grep -q "Recursion depth reached: 4"; then
     echo "ok    gcd"
 else
     echo "FAIL  gcd"
@@ -56,6 +59,13 @@ if "$bin" --reentrancy | grep -q "Reentrancy:  PASS"; then
     echo "ok    reentrancy"
 else
     echo "FAIL  reentrancy"
+    failures=$((failures + 1))
+fi
+
+if "$bin" --hostile | grep -q "Hostile caller: PASS"; then
+    echo "ok    hostile"
+else
+    echo "FAIL  hostile"
     failures=$((failures + 1))
 fi
 

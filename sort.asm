@@ -19,12 +19,13 @@
 ;
 ; Requirements from the manual:
 ;
-;   * Genuinely recursive. An iterative sort with an explicit stack array
-;     does not satisfy the activity.
+;   * Recursive. An iterative sort with an explicit stack array does not
+;     satisfy the activity.
 ;   * Lomuto partition with the last element as pivot (the manual's scheme).
 ;   * No calls into the C standard library.
-;   * The recursion must not drift the stack. Clean up arguments after each
-;     call, or a deep recursion runs into memory it does not own.
+;   * Clean the arguments off the stack after each call. The next pop
+;     otherwise loads an argument into a register you promised to
+;     preserve, and the outer call's array base is gone.
 ;
 ; The manual's pseudocode:
 ;

@@ -2,7 +2,7 @@
 #
 # renlib correctness gate. Runs every mode the manual describes and reports
 # pass or fail. Each sort must report "Match: YES"; gcd must be 21 with the
-# depth printed; the reentrancy demo must pass.
+# depth printed. The reentrancy demo must pass.
 #
 #       ./run_tests.sh
 #

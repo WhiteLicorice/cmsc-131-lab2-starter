@@ -51,11 +51,10 @@
 ;       return lo + sum_range(lo + 1, hi)
 ;
 
-; Windows C decorates the names it exports with a leading underscore and
-; Linux C does not, so the same source would otherwise need two spellings of
-; every entry point. -d ELF_TYPE, which the shared Makefile fragment passes
-; on Linux, selects the respelling here. It's the same trick asm_io.inc
-; uses for _asm_main in the bootcamp blocks. Leave this block alone.
+; Windows C puts a leading underscore on every exported name. Linux C does
+; not. The Makefile passes -d ELF_TYPE on Linux. This block then respells
+; the names below to match. asm_io.inc does the same for _asm_main in the
+; bootcamp blocks. Leave this block alone.
 %ifdef ELF_TYPE
   %define _gcd_asm gcd_asm
   %define _sum_range_asm sum_range_asm

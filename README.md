@@ -43,3 +43,83 @@ badge stays red until the routines are implemented.
 The provided files are fixtures. The grader compares your fork against the
 starter, so an edited `bench.c`, `Makefile`, `run_tests.sh`, or `tests/`
 file shows up as a diff in the open.
+
+## Documentation
+
+The three sections at the end of this file are yours. Fill in Design Notes
+and Subsystem Ownership before the Week 1 progress report. Fill in Quirks
+and Issues before the Week 3 progress report. Each section says what it
+needs. Leave the rest of this file as it is.
+
+---
+
+## Design Notes
+
+Fill this section in before the Week 1 progress report and finish it by
+Week 3. The syllabus asks for problem analysis, a solution architecture,
+and an estimated timeline. The manual's Deliverables section lists what
+this activity adds. Keep each part short. Update it when the plan changes.
+
+### Problem analysis
+
+The four routines `bench.c` expects and what each one returns. Which
+registers you preserve and why.
+
+### Solution architecture
+
+A stack frame diagram for one recursive call of `qsort_asm`, showing where
+the arguments, the return address, saved `ebp`, and the saved registers
+sit. Why `sum_range_asm` is reentrant.
+
+### Measurements
+
+The ratio `bench` reports on `random1000.txt`, `sorted1000.txt`,
+`reverse1000.txt`, `duplicates.txt`, and `identical.txt`. Your worst case
+and its cause. One improvement and its estimated effect.
+
+| File | Ratio |
+|---|---|
+| `random1000.txt` | |
+| `sorted1000.txt` | |
+| `reverse1000.txt` | |
+| `duplicates.txt` | |
+| `identical.txt` | |
+
+### Timeline
+
+One line per week. Name the subsystem each week finishes and the member
+who owns it.
+
+| Week | Goal | Owner |
+|---|---|---|
+| 1 | | |
+| 2 | | |
+| 3 | | |
+| 4 | Defense | |
+
+## Subsystem Ownership
+
+Fill this section in before the Week 1 progress report. The manual lists
+the three subsystems. Each member owns one. In a group of four, two members
+share one. The commit history must agree with this table.
+
+| Subsystem | Owner |
+|---|---|
+| Sorting (`qsort_asm` and its partition) | |
+| Searching (`bsearch_asm`, `gcd_asm`) | |
+| Convention and measurement (`sum_range_asm`, the benchmarks) | |
+
+## Quirks and Issues
+
+Fill this section in before the Week 3 progress report. The syllabus asks
+for documentation of quirks and issues with the complete implementation.
+One entry per item. State what happens, what causes it, and what the group
+did about it.
+
+### Known issues
+
+- 
+
+### Quirks
+
+- 

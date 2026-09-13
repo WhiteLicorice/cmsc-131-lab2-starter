@@ -10,6 +10,7 @@
  * makes are the contract. Read this file before writing assembly.
  */
 
+#include <errno.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -87,6 +88,15 @@ static int gcd_ref(int a, int b)
     return a;
 }
 
+/*
+ * Read the integers in a file, one whitespace-separated token at a time.
+ *
+ * Every token has to be a complete decimal integer that fits an int. A
+ * token with a valid prefix and trailing junk, such as "30z", is refused
+ * rather than read as 30. So is a token that overflows int. A malformed
+ * file is refused whole: the count is not quietly reduced to the valid
+ * prefix. Returns the count, or -1 on any failure.
+ */
 static int read_ints(const char *path, int **out)
 {
     FILE *f = fopen(path, "r");
@@ -102,8 +112,19 @@ static int read_ints(const char *path, int **out)
         return -1;
     }
 
-    int v;
-    while (fscanf(f, "%d", &v) == 1) {
+    char token[64];
+    while (fscanf(f, "%63s", token) == 1) {
+        char *end = NULL;
+        errno = 0;
+        long value = strtol(token, &end, 10);
+        int bad = (end == token) || (*end != '\0') || (errno == ERANGE)
+                  || (value < INT_MIN) || (value > INT_MAX);
+        if (bad) {
+            fprintf(stderr, "bench: %s: not an integer: %s\n", path, token);
+            free(arr);
+            fclose(f);
+            return -1;
+        }
         if (n == cap) {
             cap *= 2;
             int *grown = realloc(arr, sizeof(int) * cap);
@@ -114,7 +135,7 @@ static int read_ints(const char *path, int **out)
             }
             arr = grown;
         }
-        arr[n++] = v;
+        arr[n++] = (int)value;
     }
     fclose(f);
     *out = arr;
@@ -163,6 +184,9 @@ static int cmd_sort(const char *path)
     int *theirs = malloc(sizeof(int) * (n > 0 ? n : 1));
     if (!mine || !theirs) {
         fprintf(stderr, "bench: out of memory\n");
+        free(arr);
+        free(mine);
+        free(theirs);
         return 1;
     }
 
@@ -208,9 +232,14 @@ static int cmd_gcd(int a, int b)
 }
 
 /*
- * Search checks: load a file, sort a copy with qsort_asm, then probe
+ * Search checks: load a file, sort a copy with the C qsort, then probe
  * bsearch_asm with a key that is present (first, middle, last), absent
  * (below everything, above everything, in a gap), and the boundary sizes.
+ *
+ * The fixture is sorted with C's qsort on purpose. Sorting it with
+ * qsort_asm first would make a search failure ambiguous: the bug could be
+ * in the sort or in the search. With the fixture sorted here, every
+ * failure on this path belongs to bsearch_asm.
  */
 static int cmd_search(const char *path)
 {
@@ -222,10 +251,11 @@ static int cmd_search(const char *path)
     int *sorted = malloc(sizeof(int) * (n > 0 ? n : 1));
     if (!sorted) {
         fprintf(stderr, "bench: out of memory\n");
+        free(arr);
         return 1;
     }
     memcpy(sorted, arr, sizeof(int) * n);
-    qsort_asm(sorted, n);
+    qsort(sorted, n, sizeof(int), cmp_int);
 
     int failures = 0;
 
@@ -398,13 +428,38 @@ static int cmd_hostile(void)
     return failures ? 1 : 0;
 }
 
+/*
+ * parse_nonnegative - read one whole token as a nonnegative int.
+ *
+ * The token has to be complete: digits, and nothing but digits. A sign, a
+ * trailing character, an empty token, and a value above INT_MAX are all
+ * refused. atoi accepted "-1" and "12abc" and returned a number, so a
+ * mistyped operand reached Euclid's algorithm as a different problem.
+ */
+static int parse_nonnegative(const char *s, int *out)
+{
+    if (*s == '\0')
+        return 0;
+    for (const char *p = s; *p; p++) {
+        if (*p < '0' || *p > '9')
+            return 0;
+    }
+    errno = 0;
+    char *end = NULL;
+    long value = strtol(s, &end, 10);
+    if (errno == ERANGE || *end != '\0' || value < 0 || value > INT_MAX)
+        return 0;
+    *out = (int)value;
+    return 1;
+}
+
 static void usage(void)
 {
     fprintf(stderr,
         "usage:\n"
         "  bench --sort FILE\n"
         "  bench --search FILE\n"
-        "  bench --gcd A B\n"
+        "  bench --gcd A B        (A and B are nonnegative integers)\n"
         "  bench --reentrancy\n"
         "  bench --hostile\n");
     exit(2);
@@ -418,8 +473,14 @@ int main(int argc, char **argv)
         return cmd_sort(argv[2]);
     if (!strcmp(argv[1], "--search") && argc == 3)
         return cmd_search(argv[2]);
-    if (!strcmp(argv[1], "--gcd") && argc == 4)
-        return cmd_gcd(atoi(argv[2]), atoi(argv[3]));
+    if (!strcmp(argv[1], "--gcd") && argc == 4) {
+        int a, b;
+        if (!parse_nonnegative(argv[2], &a) || !parse_nonnegative(argv[3], &b)) {
+            fprintf(stderr, "bench: --gcd takes two nonnegative integers\n");
+            exit(2);
+        }
+        return cmd_gcd(a, b);
+    }
     if (!strcmp(argv[1], "--reentrancy"))
         return cmd_reentrancy();
     if (!strcmp(argv[1], "--hostile"))

@@ -25,16 +25,20 @@ make check
 ```
 
 `make` builds `bench`. `make check` builds, then runs `./run_tests.sh`,
-which reports each check and exits nonzero when any of them fail.
+which reports each check and exits nonzero when any of them fail. Each run
+is captured first. Its exit status is read before its text is examined,
+so a program that prints the right line and then crashes still fails.
 
 ## Reading a First Run
 
 The assembly files ship as stubs that assemble and link as-is, so the build
-works before any code is written. Right now they do nothing useful, and 16
-of the 21 checks fail. The five that pass are the four files that arrive
-already sorted and the hostile caller, which a stub that touches no
-register can't upset. That red run is the correct starting state for a
-starter, and the badge stays red until the routines are implemented.
+works before any code is written. Right now they do nothing useful, and 19
+of the 36 checks fail. The seventeen that pass prove little: four are files
+that arrive empty, single-element, or already sorted, `gcd(0, 0)` expects 0,
+the hostile caller cannot be upset by a stub that touches no register, and
+the rest are argument and file refusals that the harness performs before any
+assembly runs. That red run is the correct starting state for a starter. The
+badge stays red until the routines are implemented.
 
 The provided files are fixtures. The grader compares your fork against the
 starter, so an edited `bench.c`, `Makefile`, `run_tests.sh`, or `tests/`

@@ -32,22 +32,22 @@ so a program that prints the right line and then crashes still fails.
 ## Reading a First Run
 
 The assembly files ship as stubs that assemble and link as-is, so the build
-works before any code is written. Right now they do nothing useful, and 19
-of the 36 checks fail. The seventeen that pass prove little: four are files
-that arrive empty, single-element, or already sorted, `gcd(0, 0)` expects 0,
-the hostile caller cannot be upset by a stub that touches no register, and
-the rest are argument and file refusals that the harness performs before any
+works before you write any code. Right now they do nothing useful, and 19
+of the 36 checks fail. The seventeen that pass prove little. Four are files
+that arrive empty, single-element, or already sorted. `gcd(0, 0)` expects 0.
+The hostile caller cannot be upset by a stub that touches no register. The
+rest are argument and file refusals that the harness performs before any
 assembly runs. That red run is the correct starting state for a starter. The
-badge stays red until the routines are implemented.
+badge stays red until you implement the routines.
 
 The provided files are fixtures. The grader compares your fork against the
-starter, so an edited `bench.c`, `Makefile`, `run_tests.sh`, or `tests/`
-file shows up as a diff in the open.
+starter. An edit to `bench.c`, `Makefile`, `run_tests.sh`, or a `tests/`
+file appears as a diff in the open.
 
 ## Documentation
 
-The three sections at the end of this file are yours. Fill in Design Notes
-and Subsystem Ownership before the Week 1 progress report. Fill in Quirks
+The three sections at the end of this file are yours. Complete Design Notes
+and Subsystem Ownership before the Week 1 progress report. Complete Quirks
 and Issues before the Week 3 progress report. Each section says what it
 needs. Leave the rest of this file as it is.
 
@@ -55,7 +55,7 @@ needs. Leave the rest of this file as it is.
 
 ## Design Notes
 
-Fill this section in before the Week 1 progress report and finish it by
+Complete this section before the Week 1 progress report and finish it by
 Week 3. The syllabus asks for problem analysis, a solution architecture,
 and an estimated timeline. The manual's Deliverables section lists what
 this activity adds. Keep each part short. Update it when the plan changes.
@@ -99,7 +99,7 @@ who owns it.
 
 ## Subsystem Ownership
 
-Fill this section in before the Week 1 progress report. The manual lists
+Complete this section before the Week 1 progress report. The manual lists
 the three subsystems. Each member owns one. In a group of four, two members
 share one. The commit history must agree with this table.
 
@@ -111,7 +111,7 @@ share one. The commit history must agree with this table.
 
 ## Quirks and Issues
 
-Fill this section in before the Week 3 progress report. The syllabus asks
+Complete this section before the Week 3 progress report. The syllabus asks
 for documentation of quirks and issues with the complete implementation.
 One entry per item. State what happens, what causes it, and what the group
 did about it.

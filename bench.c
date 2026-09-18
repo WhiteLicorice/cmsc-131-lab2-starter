@@ -341,7 +341,7 @@ static int cmd_reentrancy(void)
 /*
  * The hostile caller. It loads a sentinel into each callee-saved register,
  * calls one routine through a pointer, and reads the registers back. cdecl
- * says ebx, esi, and edi must come back unchanged. Three arguments are
+ * says ebx, esi, and edi must return unchanged. Three arguments are
  * pushed for every routine. A cdecl callee ignores the extras. The caller
  * removes them. The stack pointer is checked the same way. A
  * routine that pops one too many, or takes its arguments off the stack

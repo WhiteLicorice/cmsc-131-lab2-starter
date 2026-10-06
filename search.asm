@@ -21,8 +21,7 @@
 ;   * Recursive.
 ;   * Compute the midpoint as lo + (hi - lo) / 2, never (lo + hi) / 2.
 ;     The sum can overflow 32 bits on large arrays. The difference cannot.
-;     The manual calls out that this exact bug lived in the Java standard
-;     library for nine years.
+;     This exact bug lived in the Java standard library for nine years.
 ;   * An absent key returns -1.
 ;   * An empty array and a single-element array must behave.
 ;   * No calls into the C standard library.

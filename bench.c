@@ -248,7 +248,8 @@ static int cmd_search(const char *path)
     if (n < 0)
         return 1;
 
-    int *sorted = malloc(sizeof(int) * (n > 0 ? n : 1));
+    /* One extra slot holds a sentinel past the end. See the hi_key probe. */
+    int *sorted = malloc(sizeof(int) * (n + 1));
     if (!sorted) {
         fprintf(stderr, "bench: out of memory\n");
         free(arr);
@@ -289,7 +290,13 @@ static int cmd_search(const char *path)
             }
         }
         if (sorted[n - 1] != INT_MAX) {
+            /*
+             * The slot past the end holds hi_key. A search that starts with
+             * hi = n instead of n - 1 reads that slot, finds the key, and
+             * returns n. A correct search never reads it.
+             */
             int hi_key = sorted[n - 1] + 1;
+            sorted[n] = hi_key;
             if (bsearch_asm(sorted, n, hi_key) != -1) {
                 printf("  FAIL  bsearch(%d) should be -1\n", hi_key);
                 failures++;

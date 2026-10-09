@@ -295,16 +295,21 @@ static int cmd_search(const char *path)
                 failures++;
             }
         }
-        if (n >= 2 && sorted[0] != INT_MAX) {
-            int gap = sorted[0] + 1;
-            for (int i = 1; i < n; i++) {
-                if (sorted[i] > gap) {
-                    if (bsearch_asm(sorted, n, gap) != -1) {
-                        printf("  FAIL  bsearch(%d) should be -1\n", gap);
-                        failures++;
-                    }
-                    break;
+        /*
+         * A gap probe needs two adjacent values that differ by more than
+         * one. The probe used to assume sorted[0] + 1 was absent, but an
+         * array of consecutive values holds that key. A correct bsearch
+         * then returned its index and the probe reported a failure. Walk
+         * the array and probe the first real gap instead.
+         */
+        for (int i = 1; i < n; i++) {
+            if (sorted[i - 1] != INT_MAX && sorted[i] > sorted[i - 1] + 1) {
+                int gap = sorted[i - 1] + 1;
+                if (bsearch_asm(sorted, n, gap) != -1) {
+                    printf("  FAIL  bsearch(%d) should be -1\n", gap);
+                    failures++;
                 }
+                break;
             }
         }
     }

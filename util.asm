@@ -35,9 +35,10 @@
 ;     .bss storage that changes during execution. Everything lives on the
 ;     stack and in registers. The static gcd_depth global is gcd's, not
 ;     sum_range's, and it is diagnostic rather than part of a result.
-;   * sum_range_asm calls the C function bench_callback(void) once per
-;     invocation, which is how bench makes one call overlap another. Declare
-;     it extern and call it with cdecl. It is not in the manual's
+;   * sum_range_asm calls the C function bench_callback(void) once each
+;     time C calls it, which is how bench makes one call overlap another.
+;     The recursive calls must not call it again. bench counts the calls.
+;     Declare it extern and call it with cdecl. It is not in the manual's
 ;     pseudocode, but it is what the reentrancy demo runs on.
 ;   * No calls into the C standard library.
 ;
@@ -96,8 +97,9 @@ _sum_range_asm:
         pusha
 
         ;
-        ; TODO: sum_range. Call bench_callback once per invocation, then
-        ; recurse on (lo + 1, hi) and add lo. The base case lo > hi is 0.
+        ; TODO: sum_range. Call bench_callback once, then recurse on
+        ; (lo + 1, hi) and add lo. The base case lo > hi is 0. Put the
+        ; recursion in a second routine that does not call bench_callback.
         ; Keep every intermediate on the stack. A global counter or
         ; accumulator here is what breaks reentrancy.
         ;

@@ -44,7 +44,7 @@ int  PRE_CDECL sum_range_asm(int lo, int hi) POST_CDECL;
 extern int gcd_depth;
 
 /*
- * sum_range_asm calls this once per invocation. bench guards it so that
+ * sum_range_asm calls this once each time C calls it. bench guards it so that
  * only the first call nests a second sum_range_asm mid-flight, which is
  * how the reentrancy demo makes one call overlap another.
  */
@@ -150,12 +150,18 @@ static int is_ascending(const int *arr, int n)
     return 1;
 }
 
-/* The callback guard: only the first call nests. */
+/*
+ * The callback guard: only the first call nests. callback_calls counts
+ * every call, so a routine that calls bench_callback more than once per
+ * call from C fails the reentrancy check.
+ */
 static int callback_fired = 0;
 static int nested_result = 0;
+static int callback_calls = 0;
 
 void bench_callback(void)
 {
+    callback_calls++;
     if (callback_fired)
         return;
     callback_fired = 1;
@@ -339,13 +345,16 @@ static int cmd_reentrancy(void)
 {
     callback_fired = 0;
     nested_result = 0;
+    callback_calls = 0;
     int outer = sum_range_asm(1, 1000);
     printf("sum_range_asm(1, 1000) = %d (want 500500)\n", outer);
     if (callback_fired)
         printf("nested sum_range_asm(1, 100) = %d (want 5050)\n", nested_result);
     else
         printf("nested sum_range_asm(1, 100) never ran: sum_range_asm did not call bench_callback\n");
-    int ok = callback_fired && outer == 500500 && nested_result == 5050;
+    /* Two calls from C: the outer one and the nested one. */
+    printf("bench_callback ran %d times (want 2, once per call from C)\n", callback_calls);
+    int ok = callback_fired && callback_calls == 2 && outer == 500500 && nested_result == 5050;
     printf("Reentrancy:  %s\n", ok ? "PASS" : "FAIL");
     return ok ? 0 : 1;
 }

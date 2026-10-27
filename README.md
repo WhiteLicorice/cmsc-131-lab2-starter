@@ -70,11 +70,55 @@ this activity adds. Keep each part short. Update it when the plan changes.
 The four routines `bench.c` expects and what each one returns. Which
 registers you preserve and why.
 
+`bench.c` calls four routines. Each one is recursive and calls nothing in
+the C standard library.
+
+| Routine | Arguments | Returns |
+|---|---|---|
+| `qsort_asm` | `int *arr, int n` | nothing. Sorts `arr` in place, ascending. |
+| `bsearch_asm` | `int *arr, int n, int key` | the index of `key` in the sorted `arr`, or -1. |
+| `gcd_asm` | `int a, int b` | the greatest common divisor of `a` and `b`. |
+| `sum_range_asm` | `int lo, int hi` | the sum of `lo..hi`, or 0 when `lo > hi`. |
+
+`gcd_asm` also writes the exported `.bss` int `gcd_depth`. It holds the
+number of `gcd` calls on the stack at the deepest point of the most recent
+call, with the first call as 1. `gcd(1071, 462)` reaches 4. `bench.c` reads
+it after the call returns, so it must keep the peak, not the current level.
+
+`sum_range_asm` calls the C function `bench_callback(void)` once per call
+from C. Its internal recursion does not call it. `bench` uses the callback
+to start a second `sum_range_asm` before the first returns, and counts the
+calls.
+
+cdecl, as each C-facing routine obeys it:
+
+- The caller pushes arguments right to left, so the first argument sits at
+  `[ebp+8]`, the second at `[ebp+12]`, the third at `[ebp+16]`.
+- The caller removes its arguments after the call returns. Each routine does
+  `add esp, 4*k` after every call it makes.
+- The result returns in `eax`.
+- `eax`, `ecx`, and `edx` are caller-saved. A routine can change them.
+- `ebx`, `esi`, `edi`, and `ebp` are callee-saved. A routine that uses them
+  pushes them in its prologue and pops them before `ret`. The compiled C
+  caller keeps live values there, and `bench`'s hostile caller checks them.
+
 ### Solution architecture
 
 A stack frame diagram for one recursive call of `qsort_asm`, showing where
 the arguments, the return address, saved `ebp`, and the saved registers
 sit. Why `sum_range_asm` is reentrant.
+
+The manual requires recursion for the sort and the search. Each recursive
+call gets its own stack frame, so its `lo` and `hi` live on the stack, not
+in shared storage. The activity tests that frame discipline. An iterative
+version with an explicit stack array avoids it, so it does not satisfy the
+activity.
+
+The routines are in three modules, one per subsystem: `sort.asm`,
+`search.asm`, and `util.asm`. Each member owns one file, so the commit
+history shows who did each part, and work in one file does not conflict
+with work in another. Each module exports only the names `bench.c` uses and
+keeps its internal recursive helper local.
 
 ### Measurements
 
@@ -97,10 +141,10 @@ who owns it.
 
 | Week | Goal | Owner |
 |---|---|---|
-| 1 | | |
-| 2 | | |
-| 3 | | |
-| 4 | Defense | |
+| 1 | Design Notes and ownership. `make && make check` runs on the stubs (17/36). | @dejely |
+| 2 | Sorting and Searching. `qsort_asm`, `bsearch_asm`, and `gcd_asm` pass their checks. | @Romyr05, @andrianllmm |
+| 3 | Convention and measurement. Reentrant `sum_range_asm`, Measurements, Quirks and Issues. | @dejely |
+| 4 | Defense | All members |
 
 ## Subsystem Ownership
 

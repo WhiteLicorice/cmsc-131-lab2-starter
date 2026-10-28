@@ -70,11 +70,44 @@ this activity adds. Keep each part short. Update it when the plan changes.
 The four routines `bench.c` expects and what each one returns. Which
 registers you preserve and why.
 
+**`qsort_asm(int *arr, int n)`**
+* **Purpose:** Recursively sorts the first n signed 32-bit integers of arr in place, in ascending order, comparing values in a register
+* **Return value:** None (void). The result is the rearranged array itself.
+* **Registers:** esi (the array frame), ebx (the pivot), edi(hi), esp (stack pointer), ebp(frame pointer)
+
+**`int bsearch_asm(int *arr, int n, int key)`**
+* **Purpose:** Performs a recursive binary search for integer `key` within a sorted array `arr` of size `n`
+* **Return Value:** Returns the 0-based array index of `key` if found, or `-1` if `key` is absent (returned in `eax`).
+
+**`int gcd_asm(int a, int b)`**
+* **Purpose**: Computes the greatest common divisor as a signed 32-bit integer in `eax`
+* **Return Value:** Returns the greatest common divisor (in `eax`)
+* **Side Effect:** Updates the global exported variable `gcd_depth` in `.bss` with the maximum recursion depth reached during the call (where the initial call counts as 1).
+
+**`int sum_range_asm(int lo, int hi)`**
+* **Purpose:** Returns the sum of integers from `lo` to `hi` inclusive. Calls `bench_callback` once per C call.
+* **Return Value:** The sum (in `eax`).
+* **Registers preserved:** `ebx`, `esi`, `edi`, `ebp` (callee-saved).
+* **Reentrancy:** Uses only registers and the stack (no `.data`/`.bss`). This ensures that if `bench_callback` triggers a second overlapping call, both calls keep independent state and return correct results.
+
 ### Solution architecture
 
 A stack frame diagram for one recursive call of `qsort_asm`, showing where
 the arguments, the return address, saved `ebp`, and the saved registers
 sit. Why `sum_range_asm` is reentrant.
+
+one call of qsort_inner(arr, lo, hi)
+
+higher addresses
+  [ebp+16]  hi              argument 3 
+  [ebp+12]  lo              argument 2
+  [ebp+8]   arr             argument 1 
+  [ebp+4]   return address  pushed by call
+  [ebp+0]   saved ebp         <- ebp points here
+  [ebp-4]   saved esi       
+  [ebp-8]   saved ebx       
+  [ebp-12]  saved edi         <- esp points here
+lower addresses
 
 ### Measurements
 
@@ -97,9 +130,9 @@ who owns it.
 
 | Week | Goal | Owner |
 |---|---|---|
-| 1 | | |
-| 2 | | |
-| 3 | | |
+| 1 | Interface and Plan | |
+| 2 | Sort and Search Working| Erine Lourdes Medalla, Ryona Cassandra Honrado |
+| 3 | sum_range_asm, tests, and all checks passed| Adrienne Nicole Tipon, Jhon Chriztopher Nice |
 | 4 | Defense | |
 
 ## Subsystem Ownership
@@ -110,9 +143,9 @@ share one. The commit history must agree with this table.
 
 | Subsystem | Owner |
 |---|---|
-| Sorting (`qsort_asm` and its partition) | |
-| Searching (`bsearch_asm`, `gcd_asm`) | |
-| Convention and measurement (`sum_range_asm`, the benchmarks) | |
+| Sorting (`qsort_asm` and its partition) | Erine Lourdes Medalla |
+| Searching (`bsearch_asm`, `gcd_asm`) | Ryona Cassandra Honrado |
+| Convention and measurement (`sum_range_asm`, the benchmarks) | Adrienne Nicole Tipon, Jhon Chriztopher Nice |
 
 ## Quirks and Issues
 

@@ -159,7 +159,12 @@ _sum_range_asm:
         add     esp, 8                  ; clean args
         jmp     end
 
-        
+;
+;   sum_range(lo, hi):
+;       if lo > hi: return 0
+;       return lo + sum_range(lo + 1, hi)
+;
+
 sum_rec:
         enter   0, 0
         pusha
@@ -167,11 +172,13 @@ sum_rec:
         mov     eax, [ebp+8]            ; get lo to eax
         mov     ecx, [ebp+12]           ; get hi to ecx
         
+        ; if lo > hi: return 0
         cmp     eax, ecx                ; eax-ecx
         jg      .base                   ; (lo > hi) is the base case
                                         ; jumps to .base if cmp is greater than 0
                                         ; positive difference mean eax > ecx
 
+        ; return lo + sum_range(lo + 1, hi)
         inc     eax                     ; lo + 1
         push    ecx                     ; push hi
         push    eax                     ; push lo
@@ -186,6 +193,8 @@ sum_rec:
 
 end:
         mov     [esp+28], eax           ; result into saved-eax slot
+        
+        mov     eax, 0
         popa
         leave
         ret

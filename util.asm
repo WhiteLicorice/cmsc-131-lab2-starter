@@ -76,35 +76,63 @@ segment .text
         extern  _bench_callback
 _gcd_asm:
         enter   0,0
-        pusha
 
-        ;
-        ; TODO: gcd. Count the calls. Reset gcd_depth at entry, then keep
-        ; the deepest level reached, with the first call as level 1. Carry
-        ; the current level in a register or count it in the global, but
-        ; leave the peak behind. bench.c reads gcd_depth after the call
-        ; returns, so a counter that returns to zero on exit prints 0.
-        ;
+        inc     dword [_gcd_depth]       ; increment counter on entry
+        mov     ecx, [ebp+12]           ; ECX: int b
+        mov     eax, [ebp+8]            ; EAX: int a
 
-        popa
-        mov     eax, 0
+        cmp     eax, 0                  ; edge case gcd(0, b)
+        je      .return_b
+
+        cmp     ecx, 0                  ; if (b==0):
+        je      .gcd_end                ;       return a (EAX already has a)
+
+        xor     edx, edx                ; clear edx for div
+        div     ecx                     ; edx:eax / ecx -> EDX holds (a % b)
+                                        
+        push    edx                     ; push a % b    as next b
+        push    ecx                     ; push b        as next a
+
+        call    _gcd_asm                ; recursive call
+        add     esp, 8                  ; clean up two arguments
+        jmp     .gcd_end                ; continue to end
+
+.return_b:
+        mov     eax, ecx                ; EAX: int b
+
+.gcd_end:
         leave
         ret
 
         global  _sum_range_asm
 _sum_range_asm:
         enter   0,0
-        pusha
+        call    _bench_callback    ; once per call from C, never inside the recursion
+        push    dword [ebp+12]     ; hi
+        push    dword [ebp+8]      ; lo
+        call    sum_inner
+        add     esp, 8             ; clean up 2 args
+        leave
+        ret
 
-        ;
-        ; TODO: sum_range. Call bench_callback once, then recurse on
-        ; (lo + 1, hi) and add lo. The base case lo > hi is 0. Put the
-        ; recursion in a second routine that does not call bench_callback.
-        ; Keep every intermediate on the stack. A global counter or
-        ; accumulator here is what breaks reentrancy.
-        ;
+; internal: sum_inner(lo, hi), same stack layout as cdecl, so it's easy to reason about
+sum_inner:
+        enter   0,0
+        mov     eax, [ebp+8]       ; lo
+        cmp     eax, [ebp+12]      ; signed compare against hi
+        jg      .base
 
-        popa
-        mov     eax, 0
+        mov     ecx, eax           ; ecx = lo
+        inc     ecx                ; ecx = lo + 1
+        push    dword [ebp+12]     ; hi (pushed first, right to left)
+        push    ecx                ; lo + 1
+        call    sum_inner
+        add     esp, 8             ; clean up 2 args
+        add     eax, [ebp+8]       ; result += lo (reloaded from frame)
+        leave
+        ret
+
+.base:
+        xor     eax, eax           ; return 0
         leave
         ret

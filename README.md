@@ -239,6 +239,11 @@ did about it.
   default 8 MB stack. The fixtures stop at 1000 elements, so we left it.
   Recursing into the smaller side first, or a median-of-three pivot,
   would bound the depth.
+- `sum_range_asm` overflows the stack on wide ranges. It recurses once
+  per value, 16 bytes a frame, so `sum_range(-1000000, 1000000)` faults
+  although its sum, 0, fits. `bench` only asks for short ranges.
+- A sum that does not fit 32 bits wraps around silently. The manual leaves
+  it undefined, so we did not check for overflow.
 
 ### Quirks
 
@@ -258,3 +263,8 @@ did about it.
   what they use.
 - `partition` swaps `arr[i]` with `arr[j]` even when `i == j`. That swap
   is a no-op, so we skipped the extra compare.
+- `sum_range_asm` aligns `esp` to 16 bytes before calling
+  `bench_callback`, which the cdecl contract does not require. `leave`
+  restores the original `esp`.
+- `sum_range_asm` calls `bench_callback` even for an empty range and
+  then returns 0. `bench` counts one callback per C call.

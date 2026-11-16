@@ -224,8 +224,25 @@ did about it.
 
 ### Known issues
 
-- 
+- `gcd_asm` is not reentrant. `gcd_depth` is one shared `.bss` int that
+  every call resets and every level raises, so two overlapping calls would
+  mix their depths. The returned gcd is still correct, since it lives in
+  registers and stack frames. We kept it because `bench.c` requires the
+  global.
+- `gcd_asm` is undefined for negative operands. `idiv` gives a negative
+  remainder for a negative dividend, so the result can be negative, and
+  `INT_MIN` with `-1` raises a divide fault. `bench` refuses negative
+  operands before calling, so we did not add a check.
 
 ### Quirks
 
-- 
+- On duplicates, `bsearch_asm` returns whichever matching index the
+  halving lands on, not the first. `bench` accepts any index holding the
+  key, so we left it.
+- `gcd_depth` depends on argument order. `gcd(462, 1071)` reaches 5, one
+  more than `gcd(1071, 462)`, because the first step only swaps the
+  operands. `gcd(a, 0)` and `gcd(0, 0)` reach 1.
+- The midpoint uses `shr`, not `sar`. That is safe because `hi - lo` is
+  never negative once `lo > hi` has been ruled out.
+- An empty array gives `hi = -1`, so the first call returns -1 without
+  reading memory.

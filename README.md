@@ -233,6 +233,12 @@ did about it.
   remainder for a negative dividend, so the result can be negative, and
   `INT_MIN` with `-1` raises a divide fault. `bench` refuses negative
   operands before calling, so we did not add a check.
+- `qsort_asm` overflows the stack on large sorted input. Sorted input
+  recurses about once per element, and each `qsort_rec` frame takes 24
+  bytes. A 400000-element ascending file faults with SIGSEGV under the
+  default 8 MB stack. The fixtures stop at 1000 elements, so we left it.
+  Recursing into the smaller side first, or a median-of-three pivot,
+  would bound the depth.
 
 ### Quirks
 
@@ -246,3 +252,9 @@ did about it.
   never negative once `lo > hi` has been ruled out.
 - An empty array gives `hi = -1`, so the first call returns -1 without
   reading memory.
+- `qsort_asm` saves registers with `pusha`/`popa`, all eight, not just
+  the four callee-saved ones. That costs a few extra pushes per call from
+  C but none per recursion, since `qsort_rec` and `partition` push only
+  what they use.
+- `partition` swaps `arr[i]` with `arr[j]` even when `i == j`. That swap
+  is a no-op, so we skipped the extra compare.

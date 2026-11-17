@@ -117,11 +117,11 @@ The recursion happens in `qsort_rec`, the routine `qsort_asm` calls. One
 ```
 
 Each recursive call adds a new frame below with its own `lo` and `hi`.
-The caller pops the arguments with `add esp, 12`.
+The caller removes the arguments with `add esp, 12`.
 
 Preserved registers:
 
-- `qsort_asm`: all eight (`pusha`/`popa`).
+- `qsort_asm`: none. It uses only `eax`, which is caller-saved.
 - `qsort_rec`: `ebx`, which holds `p` across both recursive calls.
 - `partition`: `ebx`, `esi`, `edi`, which hold `i`, `arr` and the pivot.
 - `ebp`: saved by `enter`, restored by `leave`, in every routine.
@@ -257,10 +257,6 @@ did about it.
   never negative once `lo > hi` has been ruled out.
 - An empty array gives `hi = -1`, so the first call returns -1 without
   reading memory.
-- `qsort_asm` saves registers with `pusha`/`popa`, all eight, not just
-  the four callee-saved ones. That costs a few extra pushes per call from
-  C but none per recursion, since `qsort_rec` and `partition` push only
-  what they use.
 - `partition` swaps `arr[i]` with `arr[j]` even when `i == j`. That swap
   is a no-op, so we skipped the extra compare.
 - `sum_range_asm` aligns `esp` to 16 bytes before calling

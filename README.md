@@ -70,9 +70,6 @@ this activity adds. Keep each part short. Update it when the plan changes.
 The four routines `bench.c` expects and what each one returns. Which
 registers you preserve and why.
 
-We write four routines for `bench.c`. All are recursive and none call the C
-library.
-
 | Routine | Arguments | Returns |
 |---|---|---|
 | `qsort_asm` | `int *arr, int n` | nothing; sorts `arr` in place, ascending |
@@ -80,19 +77,25 @@ library.
 | `gcd_asm` | `int a, int b` | gcd of `a` and `b` |
 | `sum_range_asm` | `int lo, int hi` | sum of `lo..hi`, or 0 if `lo > hi` |
 
-`gcd_asm` also sets the global `gcd_depth` to the deepest number of gcd
-calls on the stack, counting the first as 1. `bench.c` reads it after the
-call returns, so we keep the peak, not the current level.
+- All four are recursive.
+- None calls the C standard library. The only call into C is
+  `sum_range_asm` calling `bench_callback`.
+- `gcd_asm` also sets the global `gcd_depth` to the deepest number of gcd
+  calls on the stack, counting the first as 1. `bench.c` reads it after
+  the call returns, so we keep the peak, not the current level.
+- `sum_range_asm` calls `bench_callback` once per call from C, never from
+  its recursion. `bench` uses it to start a second call mid-flight and
+  checks that both results are right.
 
-`sum_range_asm` calls `bench_callback` once per call from C, never from its
-recursion. `bench` uses it to start a second call mid-flight and checks
-that both results come out right.
+#### The cdecl convention
 
-On cdecl: the caller pushes arguments right to left (first at `[ebp+8]`)
-and pops them after the call. Results go in `eax`. `eax`, `ecx`, and `edx`
-are caller-saved, so we can clobber them. `ebx`, `esi`, `edi`, and `ebp`
-are callee-saved, so we push and pop any we use. The hostile caller checks
-this.
+| Rule | Detail |
+|---|---|
+| Arguments | Pushed right to left by the caller. The first is at `[ebp+8]`. |
+| Cleanup | The caller removes the arguments after the call. |
+| Return value | In `eax`. |
+| Caller-saved | `eax`, `ecx`, `edx`. We may clobber them. |
+| Callee-saved | `ebx`, `esi`, `edi`, `ebp`. We push and pop any we use. `bench --hostile` checks this. |
 
 ### Solution architecture
 
@@ -100,12 +103,19 @@ A stack frame diagram for one recursive call of `qsort_asm`, showing where
 the arguments, the return address, saved `ebp`, and the saved registers
 sit. Why `sum_range_asm` is reentrant.
 
-The sort and search have to be recursive because the activity tests how we
-build stack frames. Each call keeps its own `lo` and `hi` in its frame. A
-loop with a manual stack would skip that.
+#### Why recursive, and why three files
+
+- **Recursive:** the activity tests how we build stack frames. Each call
+  keeps its own `lo` and `hi` in its frame. A loop with a manual stack
+  would skip that.
+- **Three files:** `sort.asm`, `search.asm`, and `util.asm`, one per
+  subsystem. Each of us owns one file, so we don't step on each other and
+  the history shows who did what.
+
+#### `qsort_rec` stack frame
 
 The recursion happens in `qsort_rec`, the routine `qsort_asm` calls. One
-`qsort_rec` frame:
+frame:
 
 ```
   hi               [ebp+16]   pushed by caller
@@ -117,36 +127,52 @@ The recursion happens in `qsort_rec`, the routine `qsort_asm` calls. One
 ```
 
 Each recursive call adds a new frame below with its own `lo` and `hi`.
-The caller pops the arguments with `add esp, 12`.
+The caller removes the arguments with `add esp, 12`.
 
-Preserved registers:
+#### Preserved registers
 
-- `qsort_asm`: all eight (`pusha`/`popa`).
-- `qsort_rec`: `ebx`, which holds `p` across both recursive calls.
-- `partition`: `ebx`, `esi`, `edi`, which hold `i`, `arr` and the pivot.
-- `ebp`: saved by `enter`, restored by `leave`, in every routine.
+| Routine | Saves | Why |
+|---|---|---|
+| `qsort_asm` | none | Uses only `eax`, which is caller-saved |
+| `qsort_rec` | `ebx` | Holds `p` across both recursive calls |
+| `partition` | `ebx`, `esi`, `edi` | Hold `i`, `arr`, and the pivot |
+| `bsearch_asm`, `bsearch_rec` | none | Use only `eax`, `ecx`, `edx` |
+| `gcd_asm`, `gcd_rec` | none | Use only `eax`, `ecx`, `edx` |
+| `sum_range_asm`, `sum_range_rec` | none | Use only `eax`, `ecx`, `edx` |
 
-We split the code into `sort.asm`, `search.asm`, and `util.asm`, one per
-subsystem. Each of us owns one file, so we don't step on each other and
-the history shows who did what.
+Every routine also saves `ebp` with `enter` and restores it with `leave`.
 
-`sum_range_asm` calls `bench_callback` once, then calls the internal
-`sum_range_rec(lo, hi)` helper. Only the outer entry calls the callback.
-The helper returns 0 for an empty range, returns `lo` for a single value,
-and otherwise adds `lo` to the recursive sum of `lo + 1..hi`. Stopping at
-equality also avoids incrementing `INT_MAX` at the end of a range.
+#### `sum_range_asm` and reentrancy
 
-The sum is reentrant because each call keeps its arguments and pending
-additions in its own stack frames. A callback can start another sum without
-changing the first call's state. Neither routine uses mutable `.data` or
-`.bss` storage, and neither touches `gcd_depth`. Both preserve the
-callee-saved registers and return the sum in `eax`.
+How it works:
 
-A non-reentrant version could keep a shared accumulator in `.bss`, reset
-it at entry, and add each value to it. If the outer call reset that
-accumulator before the callback, the nested call would leave 5050 in it.
-The outer call would then add its own 500500 and return 505550. With stack
-frames, the nested result stays separate and both sums are correct.
+1. `sum_range_asm` calls `bench_callback` once.
+2. It then calls the internal helper `sum_range_rec(lo, hi)`, which never
+   calls back.
+3. The helper returns 0 for an empty range and `lo` for a single value.
+   Otherwise it returns `lo` plus the recursive sum of `lo + 1..hi`.
+   Stopping at equality also avoids incrementing `INT_MAX` at the end of
+   a range.
+
+Why it is reentrant:
+
+- Each call keeps its arguments and pending additions in its own stack
+  frames, so a callback can start another sum without changing the first
+  call's state.
+- Neither routine uses mutable `.data` or `.bss` storage, and neither
+  touches `gcd_depth`.
+- Both preserve the callee-saved registers and return the sum in `eax`.
+
+What a non-reentrant version would look like: a shared accumulator in
+`.bss`, reset at entry, with each value added to it. In `bench
+--reentrancy`:
+
+1. The outer `sum_range(1, 1000)` resets the accumulator, then calls back.
+2. The nested `sum_range(1, 100)` runs to completion and leaves 5050 in it.
+3. The outer call adds its own 500500 and returns 505550, not 500500.
+
+With stack frames, the nested result stays separate and both sums are
+correct.
 
 ### Measurements
 
@@ -154,42 +180,52 @@ The ratio `bench` reports on `random1000.txt`, `sorted1000.txt`,
 `reverse1000.txt`, `duplicates.txt`, and `identical.txt`. Your worst case
 and its cause. One improvement and its estimated effect.
 
-| File | Ratio |
-|---|---|
-| `random1000.txt` | 0.40x |
-| `sorted1000.txt` | 6.07x |
-| `reverse1000.txt` | 3.10x |
-| `duplicates.txt` | 1.06x |
-| `identical.txt` | 1.49x |
+| File | Integers | Ratio |
+|---|---|---|
+| `random1000.txt` | 1000 | 0.40x |
+| `sorted1000.txt` | 1000 | 6.07x |
+| `reverse1000.txt` | 1000 | 3.10x |
+| `duplicates.txt` | 500 | 1.06x |
+| `identical.txt` | 100 | 1.49x |
 
-Measured on November 2, 2026, on Linux x86_64 with an Intel Core i5-12450H,
-using the default Makefile build (32-bit, no C optimization flag). Each
-entry is the median of five `./bench --sort tests/<file>` invocations.
-Each invocation times 200 sorts per implementation, including copying the
-input before each sort. All 25 invocations reported `Match: YES`.
-The ratio is assembly time divided by C `qsort` time: below 1 means the
-assembly is faster, above 1 means it is slower. Timings vary between runs
-and machines. The first three files contain 1000 integers each;
-`duplicates.txt` contains 500 and `identical.txt` contains 100.
+The ratio is assembly time divided by C `qsort` time. Below 1 means the
+assembly is faster, above 1 means it is slower.
 
-`sorted1000.txt` had the worst measured ratio. With Lomuto partition and
-the last element as pivot, an ascending array always picks the largest
-value. Each partition leaves subarrays of sizes n - 1 and 0, so the work
-is 999 + 998 + ... + 1 = 499500 comparisons for 1000 elements: O(n²)
-time and O(n) recursion depth. Reverse-sorted and identical inputs also
-produce these unbalanced partitions. On identical input, every value
-passes the `<= pivot` test. Their lower measured ratios do not change
-that worst-case complexity; the identical fixture is also much smaller.
+How we measured:
 
-One possible improvement is to choose the median of the first, middle,
-and last values, move it to the last position, then partition. For sorted
-distinct input, this would give roughly balanced splits and O(n log n)
-work. At n = 1000, the comparison count would be on the order of 10000
-instead of 499500, roughly 50 times fewer. This estimates comparisons,
-not a measured runtime speedup; pivot selection and other costs still
-matter. Median-of-three would not fix identical input with the current
-two-way partition. This is a proposed improvement only; the implementation
-keeps the manual's required last-element pivot.
+- November 2, 2026, on Linux x86_64 with an Intel Core i5-12450H.
+- The default Makefile build (32-bit, no C optimization flag).
+- Each entry is the median of five `./bench --sort tests/<file>`
+  invocations. Each invocation times 200 sorts per implementation,
+  including copying the input before each sort.
+- All 25 invocations reported `Match: YES`.
+- Timings vary between runs and machines.
+
+#### Worst case: `sorted1000.txt`
+
+- With Lomuto partition and the last element as pivot, an ascending array
+  always picks the largest value as pivot.
+- Each partition leaves subarrays of sizes n - 1 and 0, so the work is
+  999 + 998 + ... + 1 = 499500 comparisons for 1000 elements: O(n²) time
+  and O(n) recursion depth.
+- Reverse-sorted and identical inputs also produce these unbalanced
+  partitions. On identical input, every value passes the `<= pivot` test.
+  Their lower measured ratios do not change that worst-case complexity,
+  and the identical fixture is also much smaller.
+
+#### Improvement: median-of-three pivot
+
+- Choose the median of the first, middle, and last values, move it to the
+  last position, then partition.
+- For sorted distinct input, this gives roughly balanced splits and
+  O(n log n) work.
+- **Estimated effect:** at n = 1000, on the order of 10000 comparisons
+  instead of 499500, roughly 50 times fewer. This estimates comparisons,
+  not a measured runtime speedup; pivot selection and other costs still
+  matter.
+- It would not fix identical input with the current two-way partition.
+- This is a proposal only. The implementation keeps the manual's
+  last-element pivot.
 
 ### Timeline
 
@@ -224,47 +260,46 @@ did about it.
 
 ### Known issues
 
-- `gcd_asm` is not reentrant. `gcd_depth` is one shared `.bss` int that
-  every call resets and every level raises, so two overlapping calls would
-  mix their depths. The returned gcd is still correct, since it lives in
-  registers and stack frames. We kept it because `bench.c` requires the
-  global.
-- `gcd_asm` is undefined for negative operands. `idiv` gives a negative
-  remainder for a negative dividend, so the result can be negative, and
-  `INT_MIN` with `-1` raises a divide fault. `bench` refuses negative
-  operands before calling, so we did not add a check.
-- `qsort_asm` overflows the stack on large sorted input. Sorted input
-  recurses about once per element, and each `qsort_rec` frame takes 24
-  bytes. A 400000-element ascending file faults with SIGSEGV under the
-  default 8 MB stack. The fixtures stop at 1000 elements, so we left it.
-  Recursing into the smaller side first, or a median-of-three pivot,
-  would bound the depth.
-- `sum_range_asm` overflows the stack on wide ranges. It recurses once
-  per value, 16 bytes a frame, so `sum_range(-1000000, 1000000)` faults
-  although its sum, 0, fits. `bench` only asks for short ranges.
-- A sum that does not fit 32 bits wraps around silently. The manual leaves
-  it undefined, so we did not check for overflow.
+- **`gcd_asm` is not reentrant.**
+  - Cause: `gcd_depth` is one shared `.bss` int that every call resets
+    and every level raises, so two overlapping calls would mix their
+    depths. The returned gcd is still correct, since it lives in
+    registers and stack frames.
+  - What we did: kept it, because `bench.c` requires the global.
+- **`gcd_asm` is undefined for negative operands.**
+  - Cause: `idiv` gives a negative remainder for a negative dividend, so
+    the result can be negative, and `INT_MIN` with `-1` raises a divide
+    fault.
+  - What we did: no check, because `bench` refuses negative operands
+    before calling.
+- **`qsort_asm` overflows the stack on large sorted input.**
+  - Cause: sorted input recurses about once per element, and each
+    `qsort_rec` frame takes 24 bytes. A 400000-element ascending file
+    faults with SIGSEGV under the default 8 MB stack.
+  - What we did: left it, because the fixtures stop at 1000 elements.
+    Recursing into the smaller side first, or a median-of-three pivot,
+    would bound the depth.
+- **`sum_range_asm` overflows the stack on wide ranges.**
+  - Cause: it recurses once per value, 16 bytes a frame, so
+    `sum_range(-1000000, 1000000)` faults although its sum, 0, fits.
+  - What we did: left it, because `bench` only asks for short ranges.
+- **A sum that does not fit 32 bits wraps around silently.**
+  - Cause: `add` does not check for overflow.
+  - What we did: no check, because the manual leaves it undefined.
 
 ### Quirks
 
-- On duplicates, `bsearch_asm` returns whichever matching index the
-  halving lands on, not the first. `bench` accepts any index holding the
-  key, so we left it.
-- `gcd_depth` depends on argument order. `gcd(462, 1071)` reaches 5, one
-  more than `gcd(1071, 462)`, because the first step only swaps the
+- **On duplicates, `bsearch_asm` returns whichever matching index the
+  halving lands on, not the first.** `bench` accepts any index holding
+  the key, so we left it.
+- **`gcd_depth` depends on argument order.** `gcd(462, 1071)` reaches 5,
+  one more than `gcd(1071, 462)`, because the first step only swaps the
   operands. `gcd(a, 0)` and `gcd(0, 0)` reach 1.
-- The midpoint uses `shr`, not `sar`. That is safe because `hi - lo` is
-  never negative once `lo > hi` has been ruled out.
-- An empty array gives `hi = -1`, so the first call returns -1 without
+- **The midpoint uses `shr`, not `sar`.** That is safe because `hi - lo`
+  is never negative once `lo > hi` has been ruled out.
+- **An empty array gives `hi = -1`.** The first call returns -1 without
   reading memory.
-- `qsort_asm` saves registers with `pusha`/`popa`, all eight, not just
-  the four callee-saved ones. That costs a few extra pushes per call from
-  C but none per recursion, since `qsort_rec` and `partition` push only
-  what they use.
-- `partition` swaps `arr[i]` with `arr[j]` even when `i == j`. That swap
-  is a no-op, so we skipped the extra compare.
-- `sum_range_asm` aligns `esp` to 16 bytes before calling
-  `bench_callback`, which the cdecl contract does not require. `leave`
-  restores the original `esp`.
-- `sum_range_asm` calls `bench_callback` even for an empty range and
+- **`partition` swaps `arr[i]` with `arr[j]` even when `i == j`.** That
+  swap is a no-op, so we skipped the extra compare.
+- **`sum_range_asm` calls `bench_callback` even for an empty range.** It
   then returns 0. `bench` counts one callback per C call.

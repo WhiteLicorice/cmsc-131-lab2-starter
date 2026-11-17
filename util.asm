@@ -73,89 +73,91 @@ _gcd_depth      resd    1
 
 segment .text
         global  _gcd_asm
-        extern  _bench_callback
 _gcd_asm:
-        enter   0,0
+        enter   0,0                     ; push ebp; mov ebp, esp
+                                        ; uses only eax, so nothing else to save
 
-        mov     dword [_gcd_depth], 0   ; reset depth
+        mov     dword [_gcd_depth], 0   ; reset the depth for this call
 
-        push    dword 1                 ; level 1
+        push    dword 1                 ; level = 1, the first call
         push    dword [ebp+12]          ; b
         push    dword [ebp+8]           ; a
-        call    gcd_rec
-        add     esp, 12
+        call    gcd_rec                 ; eax = gcd_rec(a, b, 1)
+        add     esp, 12                 ; remove 3 arguments
 
         leave
         ret
 
 ;
-; gcd_rec(a, b, level): gcd of a and b.
-; Internal, cdecl.
-; Uses only eax, ecx, edx.
-; Raises gcd_depth to level, so the peak stays after returning.
+; gcd_rec(a, b, level) - Euclid's algorithm, recursive.
 ;
+; Internal convention: cdecl, the same as the C-facing routine.
 ;       int level                   [ebp+16]
 ;       int b                       [ebp+12]
 ;       int a                       [ebp+8]
+; Returns gcd(a, b) in eax. Clobbers eax, ecx, edx. Preserves ebx, esi,
+; edi, ebp. The caller removes the 3 arguments.
+; Raises gcd_depth to level, so the peak stays after the calls return.
 ;
 gcd_rec:
         enter   0,0
 
+        ; gcd_depth = max(gcd_depth, level)
         mov     ecx, [ebp+16]           ; ecx = level
         cmp     ecx, [_gcd_depth]
-        jle     .counted
+        jle     .depth_recorded         ; level <= gcd_depth: keep the peak
         mov     [_gcd_depth], ecx       ; new peak
-.counted:
+.depth_recorded:
 
         mov     eax, [ebp+8]            ; eax = a
         mov     ecx, [ebp+12]           ; ecx = b
         cmp     ecx, 0
-        je      .done                   ; gcd(a, 0) = a
+        je      .done                   ; b == 0: return a, already in eax
 
-        cdq
+        cdq                             ; sign-extend eax into edx:eax for idiv
         idiv    ecx                     ; edx = a % b
 
-        mov     eax, [ebp+16]
-        inc     eax
+        ; return gcd_rec(b, a % b, level + 1)
+        mov     eax, [ebp+16]           ; eax = level
+        inc     eax                     ; eax = level + 1
         push    eax                     ; level + 1
         push    edx                     ; a % b
         push    ecx                     ; b
-        call    gcd_rec
-        add     esp, 12
+        call    gcd_rec                 ; eax = gcd_rec(b, a % b, level + 1)
+        add     esp, 12                 ; remove 3 arguments
 
 .done:
         leave
         ret
 
         global  _sum_range_asm
+        extern  _bench_callback
 _sum_range_asm:
-        enter   0,0
+        enter   0,0                     ; push ebp; mov ebp, esp
+                                        ; uses only eax, so nothing else to save
 
-        ;
-        ; TODO: sum_range. Call bench_callback once, then recurse on
-        ; (lo + 1, hi) and add lo. The base case lo > hi is 0. Put the
-        ; recursion in a second routine that does not call bench_callback.
-        ; Keep every intermediate on the stack. A global counter or
-        ; accumulator here is what breaks reentrancy.
-        ;
+        ; Once per call from C, including empty ranges. bench uses this
+        ; callback to start a second sum_range_asm before this one returns.
+        call    _bench_callback         ; bench_callback()
 
-        and     esp, -16                ; align the stack before calling C
-        call    _bench_callback         ; once per C entry, including empty ranges
-
-        sub     esp, 8                  ; padding keeps the call aligned
-        push    dword [ebp+12]          ; hi survives the callback in our frame
+        push    dword [ebp+12]          ; hi
         push    dword [ebp+8]           ; lo
-        call    sum_range_rec
-        add     esp, 16                 ; remove two arguments and padding
+        call    sum_range_rec           ; eax = sum_range_rec(lo, hi)
+        add     esp, 8                  ; remove 2 arguments
 
-        leave                           ; also restores the alignment space
+        leave
         ret
 
 ;
-; sum_range_rec(lo, hi): sum of lo..hi inclusive, or 0 if lo > hi.
-; Internal, cdecl: lo at [ebp+8], hi at [ebp+12], result in eax.
-; Uses only eax; preserves ebx/esi/edi/ebp. Each frame keeps its own lo
-; until the recursive result returns. Only the C-facing entry calls back.
+; sum_range_rec(lo, hi) - the recursive sum of lo..hi inclusive.
+;
+; Internal convention: cdecl, the same as the C-facing routine.
+;       int hi                      [ebp+12]
+;       int lo                      [ebp+8]
+; Returns the sum in eax, or 0 if lo > hi. Clobbers eax. Preserves ebx,
+; esi, edi, ebp. The caller removes the 2 arguments.
+; Each frame keeps its own lo until the recursive result returns, and
+; nothing is stored outside the stack. Only the C-facing entry calls back.
 ;
 sum_range_rec:
         enter   0,0
@@ -163,18 +165,19 @@ sum_range_rec:
         mov     eax, [ebp+8]            ; eax = lo
         cmp     eax, [ebp+12]
         jg      .empty                  ; lo > hi: return 0
-        je      .done                   ; lo == hi: return lo (no lo+1 overflow)
+        je      .done                   ; lo == hi: return lo (avoids lo + 1 overflow)
 
-        inc     eax                     ; lo + 1
+        ; return lo + sum_range_rec(lo + 1, hi)
+        inc     eax                     ; eax = lo + 1
         push    dword [ebp+12]          ; hi
-        push    eax
-        call    sum_range_rec
-        add     esp, 8
-        add     eax, [ebp+8]            ; this frame's lo + recursive sum
+        push    eax                     ; lo + 1
+        call    sum_range_rec           ; eax = sum_range_rec(lo + 1, hi)
+        add     esp, 8                  ; remove 2 arguments
+        add     eax, [ebp+8]            ; eax += this frame's lo
         jmp     .done
 
 .empty:
-        xor     eax, eax
+        xor     eax, eax                ; eax = 0
 .done:
         leave
         ret

@@ -71,7 +71,8 @@ The four routines `bench.c` expects and what each one returns. Which
 registers you preserve and why.
 
 We write four routines for `bench.c`. All are recursive and none call the C
-library.
+standard library. The only call into C is `sum_range_asm` calling
+`bench_callback`.
 
 | Routine | Arguments | Returns |
 |---|---|---|
@@ -126,6 +127,8 @@ Preserved registers:
 - `partition`: `ebx`, `esi`, `edi`, which hold `i`, `arr` and the pivot.
 - `bsearch_asm`, `bsearch_rec`: none. They use only `eax`, `ecx`, and
   `edx`.
+- `gcd_asm`, `gcd_rec`, `sum_range_asm`, `sum_range_rec`: none. They use
+  only `eax`, `ecx`, and `edx`.
 - `ebp`: saved by `enter`, restored by `leave`, in every routine.
 
 We split the code into `sort.asm`, `search.asm`, and `util.asm`, one per
@@ -261,8 +264,5 @@ did about it.
   reading memory.
 - `partition` swaps `arr[i]` with `arr[j]` even when `i == j`. That swap
   is a no-op, so we skipped the extra compare.
-- `sum_range_asm` aligns `esp` to 16 bytes before calling
-  `bench_callback`, which the cdecl contract does not require. `leave`
-  restores the original `esp`.
 - `sum_range_asm` calls `bench_callback` even for an empty range and
   then returns 0. `bench` counts one callback per C call.

@@ -124,6 +124,8 @@ Preserved registers:
 - `qsort_asm`: none. It uses only `eax`, which is caller-saved.
 - `qsort_rec`: `ebx`, which holds `p` across both recursive calls.
 - `partition`: `ebx`, `esi`, `edi`, which hold `i`, `arr` and the pivot.
+- `bsearch_asm`, `bsearch_rec`: none. They use only `eax`, `ecx`, and
+  `edx`.
 - `ebp`: saved by `enter`, restored by `leave`, in every routine.
 
 We split the code into `sort.asm`, `search.asm`, and `util.asm`, one per

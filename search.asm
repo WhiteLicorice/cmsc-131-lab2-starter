@@ -55,11 +55,17 @@ _bsearch_asm:
         mov     eax, [ebp+12]           ; eax = n
         dec     eax                     ; eax = n - 1
 
+        ; initialize the recursive search 
+        ; lo = 0, hi = n - 1, key = [ebp+16], arr = [ebp+8]
         push    dword [ebp+16]          ; key
         push    eax                     ; hi
         push    dword 0                 ; lo
         push    dword [ebp+8]           ; arr
+
+        ; Going to here 
         call    bsearch_rec             ; eax = bsearch_rec(arr, 0, n - 1, key)
+
+        ; Cleaning up the stack after the call
         add     esp, 16                 ; remove 4 arguments
 
         leave
@@ -79,6 +85,9 @@ _bsearch_asm:
 bsearch_rec:
         enter   0,0
 
+        ; The first thing to do is check if the range is empty. 
+        ;If lo > hi, then the key is absent and we return -1.
+        ;Otherwise, we compute the midpoint and compare the value at that index with the key. 
         mov     ecx, [ebp+12]           ; ecx = lo
         mov     edx, [ebp+16]           ; edx = hi
         cmp     ecx, edx
@@ -93,7 +102,8 @@ bsearch_rec:
         shr     eax, 1                  ; eax = (hi - lo) / 2
         add     eax, ecx                ; eax = mid
 
-        mov     edx, [ebp+8]            ; edx = arr
+        ; At the midpoint, we can compare the value at that index with the key.
+        mov     edx, [ebp+8]            ; edx = arr  (address of the array)
         mov     edx, [edx + eax*4]      ; edx = arr[mid]
 
         ; one compare sets the flags for all three outcomes
@@ -101,6 +111,7 @@ bsearch_rec:
         je      .done                   ; arr[mid] == key: found, eax = mid
         jl      .right                  ; arr[mid] < key: go right
 
+;lo to mid - 1
 .left:                                  ; arr[mid] > key: fall through, go left
         dec     eax                     ; eax = mid - 1
         push    dword [ebp+20]          ; key
@@ -111,6 +122,7 @@ bsearch_rec:
         add     esp, 16                 ; remove 4 arguments
         jmp     .done                   ; return eax
 
+; mid + 1 to hi
 .right:
         inc     eax                     ; eax = mid + 1
         push    dword [ebp+20]          ; key
